@@ -1,11 +1,11 @@
 CXX      := -c++
 #CXXFLAGS := -pedantic-errors -std=c++11 -Wall -Wextra -Werror
-CXXFLAGS := -pedantic-errors -std=c++11 -Wall
+CXXFLAGS := -pedantic-errors -std=c++11 -w
 LDFLAGS  := -L/usr/lib -lstdc++ -lm
 BUILD    := ./build
 OBJ_DIR  := $(BUILD)/objects
-APP_DIR  := $(BUILD)/apps
-TARGET   := program
+APP_DIR  := ./
+TARGET   := prog-opt
 INCLUDE  := -Iinclude/
 SRC      :=                      \
    $(wildcard src/*.C)           \
@@ -29,7 +29,6 @@ $(APP_DIR)/$(TARGET): $(OBJECTS)
 .PHONY: all build clean debug release
 
 build:
-	@mkdir -p $(APP_DIR)
 	@mkdir -p $(OBJ_DIR)
 
 debug: CXXFLAGS += -DDEBUG -g
@@ -40,4 +39,3 @@ release: all
 
 clean:
 	-@rm -rvf $(OBJ_DIR)/*
-	-@rm -rvf $(APP_DIR)/*
