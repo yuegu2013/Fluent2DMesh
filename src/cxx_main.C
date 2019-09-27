@@ -2,20 +2,27 @@
 #include <sstream>      //std::ostringstream
 
 #include "FluentTwoDMesh.h"
+#include "FluentTwoDQuadMesh.h"
 
 int main(int argc, char **argv)
 {
-  FluentTwoDMesh * p_mesh = new FluentTwoDMesh();
+  // FluentTwoDMesh * p_mesh = new FluentTwoDMesh();
+  // bool quite = false;
+  // bool debug = false;
+  // p_mesh->createMeshFromFile("cavity.msh", quite, debug);
+
+  FluentTwoDQuadMesh * p_mesh = new FluentTwoDQuadMesh();
   bool quite = false;
   bool debug = false;
-  p_mesh->createMeshFromFile("cavity.msh", quite, debug);
+  p_mesh->createMeshFromFile("flow_with_step.msh", quite, debug);
 
   // Let's see what we have in the FluentTwoDMesh
   std::cout << "# of faces: " << p_mesh->n_Faces() << std::endl;
 
   const std::vector<Node> & node_set = p_mesh->getNodeSet();
   std::map<int, std::vector<Face> > & face_zone_map = p_mesh->getFaceZoneMap();
-  const std::vector<FluentTriCell> & cell_set = p_mesh->getCellSet();
+  // const std::vector<FluentTriCell> & cell_set = p_mesh->getCellSet();
+  const std::vector<FluentQuadCell> & cell_set = p_mesh->getCellSet();
 
   std::cout << "Number of nodes = " << node_set.size() << std::endl;
   //for (long int i = 0; i < node_set.size(); i++)
@@ -37,7 +44,8 @@ int main(int argc, char **argv)
 
   // Let's write some data into a VTU file
   FILE * ptr_File;
-  ptr_File = fopen("output.vtu", "w");
+  // ptr_File = fopen("cavity_output.vtu", "w");
+  ptr_File = fopen("step_output.vtu", "w");
   p_mesh->writeMesh(ptr_File);
   std::ostringstream out_string_stream;
 

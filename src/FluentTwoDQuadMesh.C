@@ -1,5 +1,5 @@
 //
-//  FluentTwoDMesh.C
+//  FluentTwoDQuadMesh.C
 //
 //
 //  Created by Ling Zou on 9/7/13.
@@ -13,7 +13,7 @@
 #include <algorithm>    // std::find
 #include <sstream>      //std::ostringstream
 
-#include "FluentTwoDMesh.h"
+#include "FluentTwoDQuadMesh.h"
 
 const static std::string TAB2  = "  ";
 const static std::string TAB4  = "    ";
@@ -21,7 +21,7 @@ const static std::string TAB6  = "      ";
 const static std::string TAB8  = "        ";
 const static std::string TAB10 = "          ";
 
-void FluentTriCell::addFaceAndNodes(const Face * const p_face)
+void FluentQuadCell::addFaceAndNodes(const Face * const p_face)
 {
   const long int face_id = p_face->id();
   const long int node_id1 = p_face->node_id1();
@@ -35,8 +35,17 @@ void FluentTriCell::addFaceAndNodes(const Face * const p_face)
     _node_ids.push_back(node_id2);
 }
 
-FluentTwoDMesh::SectionFlag
-FluentTwoDMesh::extractSectionFlag(std::string line)
+void FluentQuadCell::reorderNodeIDs(std::vector<int> & nodes_order)
+{
+  std::vector<long int> new_node_ids(4, -1);
+  for (int i=0; i<4; i++)
+    new_node_ids[nodes_order[i]] = _node_ids[i];
+  for (int i=0; i<4; i++)
+    _node_ids[i] = new_node_ids[i];
+}
+
+FluentTwoDQuadMesh::SectionFlag
+FluentTwoDQuadMesh::extractSectionFlag(std::string line)
 {
   if (line.compare(0, 2, "(0") == 0)          return COMMENTS_FLAG;
   else if (line.compare(0, 2, "(2") == 0)     return DIMENSIONS_FLAG;
@@ -52,7 +61,7 @@ FluentTwoDMesh::extractSectionFlag(std::string line)
 }
 
 void
-FluentTwoDMesh::createMeshFromFile(std::string fileName, bool quiet, bool debug)
+FluentTwoDQuadMesh::createMeshFromFile(std::string fileName, bool quiet, bool debug)
 {
   if(!quiet) std::cout << "Start read Fluent mesh file: " << fileName << std::endl;
 
@@ -176,7 +185,7 @@ FluentTwoDMesh::createMeshFromFile(std::string fileName, bool quiet, bool debug)
               int n_readin = sscanf(line.c_str(), "%lf %lf %lf", &x, &y, &z);
               if(n_readin == dim_node)
               {
-                // std::cout << "x y z " << x << " " << y << " " << z << std::endl;
+                //std::cout << "x y z " << x << " " << y << " " << z << std::endl;
                 Node node(x, y, z);
                 node.id() = index + 1;    // NOTE: Fluent mesh, node id starts from 1
                 _NodeSet.push_back(node);
@@ -352,14 +361,14 @@ FluentTwoDMesh::createMeshFromFile(std::string fileName, bool quiet, bool debug)
   if(!quiet) std::cout << "\nNow check if faces are properly oriented: " << std::endl;
   CheckFaceOrientation();
   if(!quiet) std::cout << "Face check end.\nEverything looks ok." << std::endl;
-  if(!quiet) std::cout << "++++++++++This is the end of FluentTwoDMesh Reading++++++++++" << std::endl << std::endl;
+  if(!quiet) std::cout << "++++++++++This is the end of FluentTwoDQuadMesh Reading++++++++++" << std::endl << std::endl;
 }
 
 void
-FluentTwoDMesh::ProcessCellData()
+FluentTwoDQuadMesh::ProcessCellData()
 {
   // We are going to reconstruct cell data from given faces and nodes data
-  _CellSet.resize(_total_Cell_number, FluentTriCell()); //empty container
+  _CellSet.resize(_total_Cell_number, FluentQuadCell()); //empty container
 
   // std::cout << "ProcessCellData start\n";
   // Loop on faces to update cell info
@@ -385,41 +394,98 @@ FluentTwoDMesh::ProcessCellData()
     }
   }
 
+  // Reorder the node ids
+  for (long int i = 0; i< _CellSet.size(); i++)
+  {
+    // sanity check
+    if (_CellSet[i].getNodeIDs().size() != 4)
+      std::cerr << i+1 << "-th cell has nodes number: " << _CellSet[i].getNodeIDs().size() << std::endl;
+    if (_CellSet[i].getFaceIDs().size() != 4)
+      std::cerr << i+1 << "-th cell has faces number: " << _CellSet[i].getFaceIDs().size() << std::endl;
+
+    std::vector<long int> node_ids = _CellSet[i].getNodeIDs();
+    std::vector<Point>    vec_nodes(4, Point(0,0,0));
+    std::vector<int>      nodes_order(4, -1);
+    for (int k=0; k<4; k++)
+      vec_nodes[k] = _NodeSet[node_ids[k] -1].point();
+
+    Order4NodesInQuad(vec_nodes, nodes_order);
+    _CellSet[i].reorderNodeIDs(nodes_order);
+  }
+
+  std::cout << "\nOK to here: " << std::endl;
   double total_volume = 0.0;
   for (long int i = 0; i < _CellSet.size(); i++)
   {
-    // sanity check
-    if (_CellSet[i].getNodeIDs().size() != 3)
-      std::cerr << i+1 << "-th cell has nodes number: " << _CellSet[i].getNodeIDs().size() << std::endl;
-    if (_CellSet[i].getFaceIDs().size() != 3)
-      std::cerr << i+1 << "-th cell has faces number: " << _CellSet[i].getFaceIDs().size() << std::endl;
-
+    double volume = 0.0;
     // centroid
     std::vector<long int> node_ids = _CellSet[i].getNodeIDs();
     double x_centroid = 0.0, y_centroid = 0.0, z_centroid = 0.0;
     for (int k = 0; k < node_ids.size(); k++)
     {
-      x_centroid += _NodeSet[node_ids[k]-1].x() / 3.0;
-      y_centroid += _NodeSet[node_ids[k]-1].y() / 3.0;
-      z_centroid += _NodeSet[node_ids[k]-1].z() / 3.0;
+      x_centroid += _NodeSet[node_ids[k]-1].x() / 4.0;
+      y_centroid += _NodeSet[node_ids[k]-1].y() / 4.0;
+      z_centroid += _NodeSet[node_ids[k]-1].z() / 4.0;
     }
     _CellSet[i].setCentroid(x_centroid, y_centroid, z_centroid);
     _CellSet[i].id() = i + 1;
 
-    // area
-    Vec3d face_vec_1 = _NodeSet[node_ids[1] - 1].point() - _NodeSet[node_ids[0] - 1].point();
-    Vec3d face_vec_2 = _NodeSet[node_ids[2] - 1].point() - _NodeSet[node_ids[1] - 1].point();
-    Vec3d cross_product = face_vec_1.cross(face_vec_2);
-    if (cross_product.z() < 0)
-      _CellSet[i].reorderNodeIDs();
-    _CellSet[i].volume() = 0.5 * cross_product.norm();
-    total_volume += _CellSet[i].volume();
+    // calculate volume of current cell
+    std::vector<Point> points(4, Point(0,0,0));
+    Point              centroid(x_centroid, y_centroid, z_centroid);
+
+    for (int k=0; k<4; k++)
+      points[k] = _NodeSet[node_ids[k] -1].point();
+
+    volume += TriangleVolumeFromPoints(centroid, points[0], points[1]);
+    volume += TriangleVolumeFromPoints(centroid, points[1], points[2]);
+    volume += TriangleVolumeFromPoints(centroid, points[2], points[3]);
+    volume += TriangleVolumeFromPoints(centroid, points[3], points[0]);
+    _CellSet[i].volume() = volume;
+
+    total_volume += volume;
   }
+
   std::cerr << "total volume = " << total_volume << std::endl;
 }
 
+double
+FluentTwoDQuadMesh::TriangleVolumeFromPoints(Point p1, Point p2, Point p3)
+{
+  Vec3d face_vec_1 = Vec3d(p2.x() - p1.x(),p2.y() - p1.y(),p2.z() - p1.z() );
+  Vec3d face_vec_2 = Vec3d(p3.x() - p2.x(),p3.y() - p2.y(),p3.z() - p2.z() );
+  Vec3d cross_product = face_vec_1.cross(face_vec_2);
+  return 0.5 * cross_product.norm();
+}
+
 void
-FluentTwoDMesh::CheckFaceOrientation()
+FluentTwoDQuadMesh::Order4NodesInQuad(std::vector<Point> nodes, std::vector<int> & order)
+{
+  double x_centroid = 0.0, y_centroid = 0.0;
+  std::vector<double> dx(4, 0.0), dy(4, 0.0);
+  for (int i=0; i<4; i++)
+  {
+    x_centroid += nodes[i].x()/4.0;
+    y_centroid += nodes[i].y()/4.0;
+  }
+  for (int i=0; i<4; i++)
+  {
+    dx[i] = nodes[i].x() - x_centroid;
+    dy[i] = nodes[i].y() - y_centroid;
+  }
+  for (int i=0; i<4; i++)
+  {
+    double ix = dx[i];
+    double iy = dy[i];
+    if (ix < 0 && iy < 0)       order[i] = 0;
+    else if (ix > 0 && iy < 0)  order[i] = 1;
+    else if (ix >0 && iy >0)    order[i] = 2;
+    else                        order[i] = 3;
+  }
+}
+
+void
+FluentTwoDQuadMesh::CheckFaceOrientation()
 {
   for (std::map<int, std::vector<Face> >::iterator it = _FaceZoneMap.begin(); it != _FaceZoneMap.end(); ++it)
   {
@@ -481,7 +547,7 @@ FluentTwoDMesh::CheckFaceOrientation()
 }
 
 void
-FluentTwoDMesh::writeMesh(FILE * ptr_File)
+FluentTwoDQuadMesh::writeMesh(FILE * ptr_File)
 {
   std::ostringstream out_string_stream;
 
@@ -507,18 +573,18 @@ FluentTwoDMesh::writeMesh(FILE * ptr_File)
   for(unsigned int i = 0; i < _CellSet.size(); i++)
   {
     std::vector<long int> node_ids = _CellSet[i].getNodeIDs();
-    out_string_stream << TAB10 << node_ids[0] - 1 << TAB2 << node_ids[1] - 1 << TAB2 << node_ids[2] - 1 << "\n";
+    out_string_stream << TAB10 << node_ids[0] - 1 << TAB2 << node_ids[1] - 1 << TAB2 << node_ids[2] - 1 << TAB2 << node_ids[3] - 1 << "\n";
   }
   out_string_stream << TAB8 << "</DataArray>" << "\n";
 
   out_string_stream << TAB8 << "<DataArray type = \"Int32\" Name=\"offsets\" format=\"ascii\">" << "\n";
   for(unsigned int i = 0; i < _CellSet.size(); i++)
-    out_string_stream << TAB10 << (int)(3*i+3) << "\n";
+    out_string_stream << TAB10 << (int)(4*i+4) << "\n";
   out_string_stream << TAB8 << "</DataArray>" << "\n";
 
   out_string_stream << TAB8 << "<DataArray type = \"UInt8\" Name=\"types\" format=\"ascii\">" << "\n";
   for(unsigned int i = 0; i < _CellSet.size(); i++)
-    out_string_stream << TAB10 << "5" << "\n";
+    out_string_stream << TAB10 << "9" << "\n";
   out_string_stream << TAB8 << "</DataArray>" << "\n";
 
   out_string_stream << TAB6 << "</Cells>" << "\n";    // CELLS ends
@@ -527,7 +593,7 @@ FluentTwoDMesh::writeMesh(FILE * ptr_File)
 }
 
 void
-FluentTwoDMesh::finishFile(FILE * ptr_File)
+FluentTwoDQuadMesh::finishFile(FILE * ptr_File)
 {
   std::ostringstream out_string_stream;
 
@@ -539,8 +605,8 @@ FluentTwoDMesh::finishFile(FILE * ptr_File)
 }
 
 void
-//FluentTwoDMesh::WriteVTUFile(FILE * ptr_File, const char* fileName)
-FluentTwoDMesh::WriteVTUFile()
+//FluentTwoDQuadMesh::WriteVTUFile(FILE * ptr_File, const char* fileName)
+FluentTwoDQuadMesh::WriteVTUFile()
 {
   /* FIXME */
   /* Is it potential ostringstream will be overflow? */
@@ -548,7 +614,7 @@ FluentTwoDMesh::WriteVTUFile()
   // prepare file name
   std::ostringstream path, filename, fullname;
   path << "output/";
-  filename << "FluentTwoDMesh.vtu";
+  filename << "FluentTwoDQuadMesh.vtu";
   fullname << path.str() << filename.str();
 
   // write mesh info first
@@ -579,18 +645,18 @@ FluentTwoDMesh::WriteVTUFile()
   for(unsigned int i = 0; i < _CellSet.size(); i++)
   {
     std::vector<long int> node_ids = _CellSet[i].getNodeIDs();
-    out_string_stream << TAB10 << node_ids[0] - 1 << TAB2 << node_ids[1] - 1 << TAB2 << node_ids[2] - 1 << "\n";
+    out_string_stream << TAB10 << node_ids[0] - 1 << TAB2 << node_ids[1] - 1 << TAB2 << node_ids[2] - 1 << TAB2 << node_ids[3] - 1<< "\n";
   }
   out_string_stream << TAB8 << "</DataArray>" << "\n";
 
   out_string_stream << TAB8 << "<DataArray type = \"Int32\" Name=\"offsets\" format=\"ascii\">" << "\n";
   for(unsigned int i = 0; i < _CellSet.size(); i++)
-    out_string_stream << TAB10 << (int)(3*i+3) << "\n";
+    out_string_stream << TAB10 << (int)(4*i+4) << "\n";
   out_string_stream << TAB8 << "</DataArray>" << "\n";
 
   out_string_stream << TAB8 << "<DataArray type = \"UInt8\" Name=\"types\" format=\"ascii\">" << "\n";
   for(unsigned int i = 0; i < _CellSet.size(); i++)
-    out_string_stream << TAB10 << "5" << "\n";
+    out_string_stream << TAB10 << "9" << "\n";
   out_string_stream << TAB8 << "</DataArray>" << "\n";
 
   out_string_stream << TAB6 << "</Cells>" << "\n";    // CELLS ends

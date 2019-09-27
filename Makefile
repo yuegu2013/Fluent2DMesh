@@ -10,9 +10,9 @@ INCLUDE  := -Iinclude/
 SRC      :=                      \
    $(wildcard src/*.C)           \
 
-# $(wildcard src/module1/*.cpp)
-# $(wildcard src/module1/*.cpp)
-# $(wildcard src/module1/*.cpp)
+# $(wildcard src/module1/*.C)
+# $(wildcard src/module1/*.C)
+# $(wildcard src/module1/*.C)
 
 OBJECTS := $(SRC:%.C=$(OBJ_DIR)/%.o)
 

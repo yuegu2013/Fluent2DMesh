@@ -1,13 +1,13 @@
 //
-//  FluentTwoDMesh.h
+//  FluentTwoDQuadMesh.h
 //
 //
 //  Created by Ling Zou on 9/7/13.
 //
 //
 
-#ifndef _FluentTwoDMesh_h
-#define _FluentTwoDMesh_h
+#ifndef _FluentTwoDQuadMesh_h
+#define _FluentTwoDQuadMesh_h
 
 #include <string>
 #include <vector>
@@ -17,10 +17,10 @@
 #include "Cell.h"
 #include "Face.h"
 
-class FluentTriCell {
+class FluentQuadCell {
 public:
-  FluentTriCell() : _id(-1), _volume(-1.0) {}
-  ~FluentTriCell() {}
+  FluentQuadCell() : _id(-1), _volume(-1.0) {}
+  ~FluentQuadCell() {}
 
   inline const long int id() const { return _id; }
   inline long int & id() { return _id; }
@@ -41,16 +41,8 @@ public:
   void addFaceAndNodes(const Face * const p_face);
   void addNeighborCellID(long int cell_id) { _nb_cell_ids.push_back(cell_id); }
   const std::vector<long int> & getNeighborCellIDs() const { return _nb_cell_ids; }
-  void reorderNodeIDs()
-  {  long int tmp_id = _node_ids[2];
-     _node_ids[2] = _node_ids[1];
-     _node_ids[1] = tmp_id;
-  }
+  void reorderNodeIDs(std::vector<int> & nodes_order);
 
-  // Fluent two-d mesh data structure won't let us do this.
-  // Alternatively, nodes and faces are given. Adjacent cell ids of a face are given.
-  // Therefore, cell data could be reconstructed while not necessarily stored.
-  // FluentTriCell(long int face_id1, long int face_id2, long int face_id3);
 
 protected:
   long int _id;
@@ -61,15 +53,17 @@ protected:
   std::vector<long int> _nb_cell_ids;
 };
 
-class FluentTwoDMesh {
+class FluentTwoDQuadMesh {
 public:
-  FluentTwoDMesh():_dim(2) {}
-  ~FluentTwoDMesh() {}
+  FluentTwoDQuadMesh():_dim(2) {}
+  ~FluentTwoDQuadMesh() {}
 
   void createMeshFromFile(std::string fileName, bool quiet = true, bool debug = false);
   unsigned const int Dim() const { return _dim; }
+  void Order4NodesInQuad(std::vector<Point> nodes, std::vector<int> & order);
   void ProcessCellData();
   void CheckFaceOrientation();
+  double TriangleVolumeFromPoints(Point p1, Point p2, Point p3);
   // void WriteVTKFile(FILE * ptr_File, const char* fileName);
   //void WriteVTUFile(FILE * ptr_File, const char* fileName);
   void WriteVTUFile();
@@ -81,7 +75,7 @@ public:
 
   const std::vector<Node> & getNodeSet() const { return _NodeSet; }
   std::map<int, std::vector<Face> > & getFaceZoneMap() { return _FaceZoneMap; }
-  const std::vector<FluentTriCell> & getCellSet() const { return _CellSet; }
+  const std::vector<FluentQuadCell> & getCellSet() const { return _CellSet; }
 
 protected:
   // File parser interfaces
@@ -109,7 +103,7 @@ protected:
 
   std::vector<Node> _NodeSet;
   std::map<int, std::vector<Face> > _FaceZoneMap;
-  std::vector<FluentTriCell> _CellSet;
+  std::vector<FluentQuadCell> _CellSet;
 };
 
 #endif
